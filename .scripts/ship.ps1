@@ -47,7 +47,7 @@ if (-not $status) {
     exit 1
 }
 
-if((npm pk get scripts.lint) -eq "{}"){
+if((npm pkg get scripts.lint) -eq "{}"){
     Write-Host "No lint script found in package.json. Add one before shipping." -ForegroundColor Red
     exit 1
 }
@@ -127,72 +127,73 @@ Write-Host "`nPull Request created:" -ForegroundColor Green
 Write-Host $prUrl
 
 # --------------------------------------------------
-# Step 7: Wait for CI
-# --------------------------------------------------
-Write-Host "`nWaiting for CI..." -ForegroundColor Cyan
-
-# Give GitHub a moment to register the checks
-Start-Sleep -Seconds 10
-
-gh pr checks $branchName --watch
-
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "`nCI failed. PR left open: $prUrl" -ForegroundColor Red
-    Write-Host "You are currently on: $branchName" -ForegroundColor Yellow
-    exit 1
-}
-
-Write-Host "`nCI passed." -ForegroundColor Green
-
-# --------------------------------------------------
-# Step 8: Check mergeability
+# Step 7: Enable automatic PR merge
 # --------------------------------------------------
 
-Write-Host "`nChecking for merge conflicts..." -ForegroundColor Cyan
-
-$mergeable = gh pr view $branchName --json mergeable --jq ".mergeable"
-
-if ($mergeable -eq "CONFLICTING") {
-    Write-Host "`nMerge conflict detected." -ForegroundColor Red
-    Write-Host "The PR was not merged." -ForegroundColor Yellow
-    Write-Host "Resolve the conflict manually, then merge the PR." -ForegroundColor Yellow
-    exit 1
-}
-
-if ($mergeable -eq "UNKNOWN") {
-    Write-Host "`nGitHub has not finished determining mergeability." -ForegroundColor Yellow
-    Write-Host "The PR was not merged automatically." -ForegroundColor Yellow
-    exit 1
-}
-
-Write-Host "No merge conflicts detected." -ForegroundColor Green
-
-# --------------------------------------------------
-# Step 9: Ask before merge
-# --------------------------------------------------
-
-$merge = Read-Host "`nMerge this PR now? (y/N)"
-
-if ($merge -ne "y") {
-    Write-Host "`nPR left open." -ForegroundColor Yellow
-    Write-Host "You are currently on: $branchName" -ForegroundColor Yellow
-    exit 0
-}
-
-# --------------------------------------------------
-# Step 10: Merge PR
-# --------------------------------------------------
-
-Write-Host "`nMerging PR..." -ForegroundColor Cyan
+Write-Host "`nEnabling automatic PR merge..." -ForegroundColor Cyan
 
 gh pr merge $branchName `
+    --auto `
     --squash `
     --delete-branch
 
-Write-Host "`nPR merged successfully." -ForegroundColor Green
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "`nCould not enable automatic merging." -ForegroundColor Red
+    Write-Host "PR remains open: $prUrl" -ForegroundColor Yellow
+    exit 1
+}
+
+Write-Host "`nAutomatic merge enabled." -ForegroundColor Green
+Write-Host "GitHub will merge once all required checks pass." -ForegroundColor Green
 
 # --------------------------------------------------
-# Step 11: Return to main
+# Step 8: Wait for CI
+# --------------------------------------------------
+
+Write-Host "`nWaiting for CI..." -ForegroundColor Cyan
+
+gh pr checks $prUrl --watch
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "`nCI failed. PR remains open: $prUrl" -ForegroundColor Red
+    Write-Host "Fix the issues and push another commit to this branch." -ForegroundColor Yellow
+    exit 1
+}
+
+Write-Host "`nAll CI checks passed." -ForegroundColor Green
+Write-Host "GitHub will complete the automatic merge." -ForegroundColor Green
+
+
+# --------------------------------------------------
+# Step 9: Wait for automatic merge completion
+# --------------------------------------------------
+
+Write-Host "`nWaiting for GitHub to complete the merge..." -ForegroundColor Cyan
+
+$merged = $false
+
+for ($i = 0; $i -lt 12; $i++) {
+
+    $state = gh pr view $prUrl --json state --jq ".state"
+
+    if ($state -eq "MERGED") {
+        $merged = $true
+        break
+    }
+
+    Start-Sleep -Seconds 5
+}
+
+if (-not $merged) {
+    Write-Host "`nPR is still open or awaiting merge." -ForegroundColor Yellow
+    Write-Host "Check GitHub before continuing: $prUrl" -ForegroundColor Yellow
+    exit 0
+}
+
+Write-Host "`nPR successfully merged!" -ForegroundColor Green
+
+# --------------------------------------------------
+# Step 10: Return to main
 # --------------------------------------------------
 
 Write-Host "`nReturning to main..." -ForegroundColor Cyan
