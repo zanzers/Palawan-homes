@@ -155,8 +155,21 @@ Write-Host "`nWaiting for CI..." -ForegroundColor Cyan
 gh pr checks $prUrl --watch
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "`nCI failed. PR remains open: $prUrl" -ForegroundColor Red
-    Write-Host "Fix the issues and push another commit to this branch." -ForegroundColor Yellow
+
+    Write-Host "`nCI failed. Cleaning up..." -ForegroundColor Red
+    git reset --soft main
+    gh pr close $prUrl
+    git push origin --delete $branchName
+
+    git switch main
+
+
+    git branch -D $branchName
+
+    Write-Host "`nCleanup completed." -ForegroundColor Green
+    Write-Host "Your changes are preserved and ready for correction." -ForegroundColor Yellow
+    Write-Host "Fix the issues, then run ship again." -ForegroundColor Cyan
+
     exit 1
 }
 
