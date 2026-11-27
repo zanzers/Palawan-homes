@@ -1,3 +1,6 @@
+[![CI](https://github.com/zanzers/Palawan-homes/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/zanzers/Palawan-homes/actions/workflows/ci.yml)
+
+
 # Palawan Homes Agent Portal
 
 **Your Properties. Your Business. One Workspace.**
